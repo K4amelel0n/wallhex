@@ -14,3 +14,8 @@ target/
 
 # Environment
 .env
+
+.run
+.classpath
+.project
+.settings
