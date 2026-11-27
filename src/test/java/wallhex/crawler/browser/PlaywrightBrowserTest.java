@@ -5,8 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
@@ -26,6 +31,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedStatic;
 import wallhex.crawler.model.ActionResult;
 import wallhex.crawler.model.BrowserConfig;
 import wallhex.crawler.model.BrowserObservation;
@@ -35,6 +41,42 @@ import wallhex.crawler.model.ElementTarget;
 public class PlaywrightBrowserTest {
 
   private static final String NEXT_PAGE = "<p id=\"page\">Następna strona</p>";
+
+  @Nested
+  class Constructor {
+
+    @Test
+    void shouldClosePlaywrightWhenBrowserLaunchFails() {
+      try (MockedStatic<Playwright> playwrightStatic = mockStatic(Playwright.class)) {
+        Playwright playwright = mock(Playwright.class);
+        BrowserType chromium = mock(BrowserType.class);
+        playwrightStatic.when(Playwright::create).thenReturn(playwright);
+        when(playwright.chromium()).thenReturn(chromium);
+        when(chromium.launch()).thenThrow(new PlaywrightException("launch failed"));
+
+        assertThrows(PlaywrightException.class, PlaywrightBrowser::new);
+
+        verify(playwright).close();
+      }
+    }
+
+    @Test
+    void shouldClosePlaywrightWhenContextCreationFails() {
+      try (MockedStatic<Playwright> playwrightStatic = mockStatic(Playwright.class)) {
+        Playwright playwright = mock(Playwright.class);
+        BrowserType chromium = mock(BrowserType.class);
+        Browser browser = mock(Browser.class);
+        playwrightStatic.when(Playwright::create).thenReturn(playwright);
+        when(playwright.chromium()).thenReturn(chromium);
+        when(chromium.launch()).thenReturn(browser);
+        when(browser.newContext()).thenThrow(new PlaywrightException("context failed"));
+
+        assertThrows(PlaywrightException.class, PlaywrightBrowser::new);
+
+        verify(playwright).close();
+      }
+    }
+  }
 
   @Nested
   class Navigate {
