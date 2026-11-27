@@ -34,6 +34,8 @@ import wallhex.crawler.model.ElementTarget;
 
 public class PlaywrightBrowserTest {
 
+  private static final String NEXT_PAGE = "<p id=\"page\">Następna strona</p>";
+
   @Nested
   class Navigate {
     @Test
@@ -470,6 +472,36 @@ public class PlaywrightBrowserTest {
         server.stop(0);
       }
     }
+
+    @Test
+    void shouldNavigateWhenRegularLinkIsClicked() throws IOException {
+
+      String html =
+          """
+          <a href="/next">Dalej</a>
+          """;
+
+      HttpServer server = startServer(html);
+      try (PlaywrightBrowser browser =
+          new PlaywrightBrowser(
+              new BrowserConfig(
+                  List.of("a[href]"), BrowserConfig.defaults().requestResourceTypes()))) {
+
+        browser.navigate(serverUrl(server));
+        ElementTarget link = browser.observe().interactionCandidates().getFirst();
+
+        ActionResult result = browser.click(link);
+
+        String nextUrl = serverUrl(server) + "next";
+        BrowserObservation observation = browser.observe();
+        assertEquals(nextUrl, observation.url());
+        assertTrue(observation.dom().contains(NEXT_PAGE));
+        assertEquals(
+            List.of(new CapturedRequest(nextUrl, "GET", null, "document")), result.requests());
+      } finally {
+        server.stop(0);
+      }
+    }
   }
 
   @Nested
@@ -527,6 +559,7 @@ public class PlaywrightBrowserTest {
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext("/", exchange -> respond(exchange, "text/html", html));
     server.createContext("/api/items", exchange -> respond(exchange, "application/json", "[]"));
+    server.createContext("/next", exchange -> respond(exchange, "text/html", NEXT_PAGE));
     server.start();
     return server;
   }
