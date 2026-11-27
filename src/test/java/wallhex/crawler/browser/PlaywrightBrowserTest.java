@@ -10,6 +10,11 @@ import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
@@ -21,8 +26,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
+import wallhex.crawler.model.ActionResult;
 import wallhex.crawler.model.BrowserConfig;
 import wallhex.crawler.model.BrowserObservation;
+import wallhex.crawler.model.CapturedRequest;
 import wallhex.crawler.model.ElementTarget;
 
 public class PlaywrightBrowserTest {
@@ -100,7 +107,9 @@ public class PlaywrightBrowserTest {
           <p>Tekst</p>
           """;
 
-      try (PlaywrightBrowser browser = new PlaywrightBrowser(new BrowserConfig(selectors))) {
+      try (PlaywrightBrowser browser =
+          new PlaywrightBrowser(
+              new BrowserConfig(selectors, BrowserConfig.defaults().requestResourceTypes()))) {
 
         browser.navigate(htmlUrl(html));
 
@@ -435,6 +444,32 @@ public class PlaywrightBrowserTest {
         assertTrue(browser.observe().dom().contains("<p id=\"status\">klik</p>"));
       }
     }
+
+    @Test
+    void shouldReturnDelayedFetchSentByClick() throws IOException {
+
+      String html =
+          """
+          <button onclick="setTimeout(() => fetch('/api/items', {method: 'POST', body: 'q=1'}), 200)">
+            Pobierz
+          </button>
+          """;
+
+      HttpServer server = startServer(html);
+      try (PlaywrightBrowser browser = new PlaywrightBrowser(buttonsOnly())) {
+
+        browser.navigate(serverUrl(server));
+        ElementTarget button = browser.observe().interactionCandidates().getFirst();
+
+        ActionResult result = browser.click(button);
+
+        assertEquals(
+            List.of(new CapturedRequest(serverUrl(server) + "api/items", "POST", "q=1", "fetch")),
+            result.requests());
+      } finally {
+        server.stop(0);
+      }
+    }
   }
 
   @Nested
@@ -485,7 +520,29 @@ public class PlaywrightBrowserTest {
   }
 
   private BrowserConfig buttonsOnly() {
-    return new BrowserConfig(List.of("button"));
+    return new BrowserConfig(List.of("button"), BrowserConfig.defaults().requestResourceTypes());
+  }
+
+  private HttpServer startServer(String html) throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/", exchange -> respond(exchange, "text/html", html));
+    server.createContext("/api/items", exchange -> respond(exchange, "application/json", "[]"));
+    server.start();
+    return server;
+  }
+
+  private static void respond(HttpExchange exchange, String contentType, String body)
+      throws IOException {
+    byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+    exchange.getResponseHeaders().set("Content-Type", contentType + "; charset=UTF-8");
+    exchange.sendResponseHeaders(200, bytes.length);
+    try (OutputStream out = exchange.getResponseBody()) {
+      out.write(bytes);
+    }
+  }
+
+  private String serverUrl(HttpServer server) {
+    return "http://127.0.0.1:" + server.getAddress().getPort() + "/";
   }
 
   private String htmlUrl(String html) {

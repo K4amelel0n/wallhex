@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
+import wallhex.crawler.model.ActionResult;
 import wallhex.crawler.model.BrowserConfig;
 import wallhex.crawler.model.BrowserObservation;
 import wallhex.crawler.model.ElementTarget;
@@ -21,6 +22,7 @@ public class PlaywrightBrowser implements AutoCloseable {
   private final BrowserContext context;
   private Page page;
   private final BrowserConfig config;
+  private final NetworkMonitor networkMonitor;
 
   private static final JsonMapper MAPPER =
       JsonMapper.builder()
@@ -34,21 +36,32 @@ public class PlaywrightBrowser implements AutoCloseable {
 
   public PlaywrightBrowser(BrowserConfig config) {
     this.config = Objects.requireNonNull(config, "config");
+    networkMonitor = new NetworkMonitor(config.requestResourceTypes());
+
     playwright = Playwright.create();
 
     try {
       browser = playwright.chromium().launch();
       context = browser.newContext();
-      context.addInitScript(JsScript.COMMON.source());
+      initContext();
       page = context.newPage();
+
     } catch (RuntimeException e) {
       playwright.close();
       throw e;
     }
   }
 
-  public void navigate(String url) {
-    page.navigate(url);
+  private void initContext() {
+
+    context.addInitScript(JsScript.COMMON.source());
+    context.onRequest(networkMonitor::onRequest);
+    context.onRequestFinished(networkMonitor::onRequestFinished);
+    context.onRequestFailed(networkMonitor::onRequestFailed);
+  }
+
+  public ActionResult navigate(String url) {
+    return new ActionResult(networkMonitor.captureRequests(page, () -> page.navigate(url)));
   }
 
   public BrowserObservation observe() {
@@ -56,7 +69,7 @@ public class PlaywrightBrowser implements AutoCloseable {
     return new BrowserObservation(page.url(), page.content(), findClickableElements());
   }
 
-  public void click(ElementTarget target) {
+  public ActionResult click(ElementTarget target) {
     String selector = target.selector();
     if (selector == null || selector.isEmpty())
       throw new IllegalArgumentException("selector must not be blank");
@@ -72,7 +85,7 @@ public class PlaywrightBrowser implements AutoCloseable {
     String actual = observedElement.accessibleName();
     requireTextMatches(actual, target.expectedText());
 
-    locator.click();
+    return new ActionResult(networkMonitor.captureRequests(page, locator::click));
   }
 
   private List<ElementTarget> findClickableElements() {
