@@ -9,7 +9,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import wallhex.crawler.model.CapturedRequest;
 
-public class NetworkMonitor {
+class NetworkMonitor {
 
   private final List<String> requestResourceTypes;
   private final List<String> ignoredResourceTypes = List.of("websocket", "eventsource");
