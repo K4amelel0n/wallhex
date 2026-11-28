@@ -17,6 +17,22 @@ import wallhex.crawler.model.BrowserConfig;
 import wallhex.crawler.model.BrowserObservation;
 import wallhex.crawler.model.ElementTarget;
 
+/**
+ * A browser session that navigates, observes the DOM and clicks targets, exposing only plain data.
+ *
+ * <p><b>Threading:</b> an instance is not thread-safe and must be used only from the thread that
+ * created it. The constructor creates the Playwright objects ({@code Playwright}, {@code Browser},
+ * {@code BrowserContext}, {@code Page}), and Playwright for Java requires every call on them,
+ * including {@link #close()}, to come from that same thread. Run one instance per thread instead of
+ * sharing one.
+ *
+ * <p>Playwright also delivers its events (for example {@code onRequest}) only while this thread is
+ * inside a Playwright call. That is why the network-quiet wait in {@code NetworkMonitor} waits with
+ * {@code Page.waitForTimeout} and not with {@code Thread.sleep}.
+ *
+ * @see <a href="https://playwright.dev/java/docs/multithreading">Playwright Java:
+ *     Multithreading</a>
+ */
 public class PlaywrightBrowser implements AutoCloseable {
 
   private final Playwright playwright;
