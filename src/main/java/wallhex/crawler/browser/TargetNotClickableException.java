@@ -17,10 +17,6 @@ public class TargetNotClickableException extends RuntimeException {
         TargetNotClickableReason.TEXT_MISMATCH, actual, expected);
   }
 
-  public static TargetNotClickableException stateChanged(String selector) {
-    return new TargetNotClickableException(TargetNotClickableReason.STATE_CHANGED, selector);
-  }
-
   public static TargetNotClickableException notFound(String selector) {
     return new TargetNotClickableException(TargetNotClickableReason.NOT_FOUND, selector);
   }

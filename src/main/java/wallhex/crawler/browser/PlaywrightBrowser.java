@@ -97,7 +97,13 @@ public class PlaywrightBrowser implements AutoCloseable {
 
     List<ObservedElement> discoverResult = discover(locator);
 
-    if (discoverResult.isEmpty()) throw TargetNotClickableException.stateChanged(target.selector());
+    if (discoverResult.isEmpty()) {
+      // The element changed between the guards and discover (removed, hidden or disabled).
+      // Re-run the guards so the precise reason is reported; NOT_FOUND if the state flipped back.
+      requireSingleMatch(locator, target.selector());
+      requireVisibleAndEnabled(locator, target.selector());
+      throw TargetNotClickableException.notFound(target.selector());
+    }
 
     ObservedElement observedElement = discoverResult.getFirst();
     String actual = observedElement.accessibleName();

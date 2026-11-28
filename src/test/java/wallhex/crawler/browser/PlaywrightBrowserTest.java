@@ -518,6 +518,41 @@ public class PlaywrightBrowserTest {
     }
 
     @Test
+    void shouldReportPreciseReasonWhenElementChangesDuringChecks() {
+
+      // The page wraps the visibility helper so the button hides itself right after the first
+      // check: the guards pass, discover finds nothing, and the re-run guards see it hidden.
+      String html =
+          """
+          <button id="target"
+              onclick="document.getElementById('status').textContent = 'klik'">Kliknij</button>
+          <p id="status">brak kliknięcia</p>
+          <script>
+            const helpers = document._wallhex;
+            const isVisible = helpers.isVisible;
+            let checks = 0;
+            helpers.isVisible = (element) => {
+              const visible = isVisible(element);
+              if (++checks === 1) element.style.display = "none";
+              return visible;
+            };
+          </script>
+          """;
+
+      try (PlaywrightBrowser browser = new PlaywrightBrowser()) {
+
+        browser.navigate(htmlUrl(html));
+        ElementTarget target = new ElementTarget("#target", "", "Kliknij");
+
+        TargetNotClickableException ex =
+            assertThrows(TargetNotClickableException.class, () -> browser.click(target));
+
+        assertEquals(TargetNotClickableReason.NOT_VISIBLE, ex.reason());
+        assertTrue(browser.observe().dom().contains("<p id=\"status\">brak kliknięcia</p>"));
+      }
+    }
+
+    @Test
     void shouldFailWithClickTimeoutWhenElementIsCovered() {
 
       String html =
