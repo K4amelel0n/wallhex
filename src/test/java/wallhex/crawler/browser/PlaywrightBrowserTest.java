@@ -2,6 +2,7 @@ package wallhex.crawler.browser;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,12 +16,14 @@ import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.TimeoutError;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.stream.Stream;
@@ -511,6 +514,39 @@ public class PlaywrightBrowserTest {
             result.requests());
       } finally {
         server.stop(0);
+      }
+    }
+
+    @Test
+    void shouldFailWithClickTimeoutWhenElementIsCovered() {
+
+      String html =
+          """
+          <button id="target"
+              onclick="document.getElementById('status').textContent = 'klik'">Kliknij</button>
+          <p id="status">brak kliknięcia</p>
+          <div style="position: fixed; inset: 0; background: white"></div>
+          """;
+      Duration timeout = Duration.ofMillis(300);
+
+      try (PlaywrightBrowser browser =
+          new PlaywrightBrowser(BrowserConfig.defaults().withClickTimeout(timeout))) {
+
+        browser.navigate(htmlUrl(html));
+        ElementTarget covered = new ElementTarget("#target", "", "Kliknij");
+
+        long start = System.nanoTime();
+        ClickTimeoutException ex =
+            assertThrows(ClickTimeoutException.class, () -> browser.click(covered));
+        Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
+
+        assertEquals("#target", ex.selector());
+        assertEquals(timeout, ex.timeout());
+        assertInstanceOf(TimeoutError.class, ex.getCause());
+        assertTrue(
+            elapsed.compareTo(Duration.ofSeconds(5)) < 0,
+            "click took " + elapsed.toMillis() + " ms, expected the configured short timeout");
+        assertTrue(browser.observe().dom().contains("<p id=\"status\">brak kliknięcia</p>"));
       }
     }
 

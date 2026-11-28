@@ -5,6 +5,8 @@ import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.TimeoutError;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -85,7 +87,17 @@ public class PlaywrightBrowser implements AutoCloseable {
     String actual = observedElement.accessibleName();
     requireTextMatches(actual, target.expectedText());
 
-    return new ActionResult(networkMonitor.captureRequests(page, locator::click));
+    return new ActionResult(
+        networkMonitor.captureRequests(page, () -> clickWithTimeout(locator, selector)));
+  }
+
+  private void clickWithTimeout(Locator locator, String selector) {
+    Duration timeout = config.clickTimeout();
+    try {
+      locator.click(new Locator.ClickOptions().setTimeout(timeout.toMillis()));
+    } catch (TimeoutError e) {
+      throw new ClickTimeoutException(selector, timeout, e);
+    }
   }
 
   private List<ElementTarget> findClickableElements() {
