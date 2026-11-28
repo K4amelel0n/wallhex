@@ -152,8 +152,7 @@ public class PlaywrightBrowserTest {
           """;
 
       try (PlaywrightBrowser browser =
-          new PlaywrightBrowser(
-              new BrowserConfig(selectors, BrowserConfig.defaults().requestResourceTypes()))) {
+          new PlaywrightBrowser(BrowserConfig.defaults().withClickableSelectors(selectors))) {
 
         browser.navigate(htmlUrl(html));
 
@@ -526,8 +525,7 @@ public class PlaywrightBrowserTest {
       HttpServer server = startServer(html);
       try (PlaywrightBrowser browser =
           new PlaywrightBrowser(
-              new BrowserConfig(
-                  List.of("a[href]"), BrowserConfig.defaults().requestResourceTypes()))) {
+              BrowserConfig.defaults().withClickableSelectors(List.of("a[href]")))) {
 
         browser.navigate(serverUrl(server));
         ElementTarget link = browser.observe().interactionCandidates().getFirst();
@@ -594,7 +592,7 @@ public class PlaywrightBrowserTest {
   }
 
   private BrowserConfig buttonsOnly() {
-    return new BrowserConfig(List.of("button"), BrowserConfig.defaults().requestResourceTypes());
+    return BrowserConfig.defaults().withClickableSelectors(List.of("button"));
   }
 
   private HttpServer startServer(String html) throws IOException {
